@@ -1,3 +1,5 @@
+mod framing;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::io::ErrorKind;
