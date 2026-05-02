@@ -1,7 +1,7 @@
 use std::process::Stdio;
 
 use bundt::framing::{read_frame, write_frame};
-use tokio::io::BufReader;
+use tokio::io::{AsyncWriteExt, BufReader};
 
 fn find_vtsls() -> Option<String> {
     // Honour an explicit override first (useful in CI or when vtsls is not on PATH).
@@ -27,7 +27,7 @@ async fn initialize_round_trip() {
         return;
     };
 
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_bundt"))
+    let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_bundt"))
         .args([&vtsls, "--stdio"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -46,10 +46,10 @@ async fn initialize_round_trip() {
     let exit_notification = br#"{"jsonrpc":"2.0","method":"exit"}"#;
     write_frame(&mut frame_buf, exit_notification).await.unwrap();
 
-    std::io::Write::write_all(&mut stdin, &frame_buf).unwrap();
+    stdin.write_all(&frame_buf).await.unwrap();
     drop(stdin);
 
-    let output = child.wait_with_output().unwrap();
+    let output = child.wait_with_output().await.unwrap();
 
     // bundt should exit 0 (vtsls cleans up on `exit`).
     assert!(

@@ -52,16 +52,11 @@ mod tests {
     use super::*;
     use tokio::io::BufReader;
 
-    async fn wire(body: &[u8]) -> Vec<u8> {
-        let mut buf = Vec::new();
-        write_frame(&mut buf, body).await.unwrap();
-        buf
-    }
-
     #[tokio::test]
     async fn round_trip_single_frame() {
         let body = b"{\"jsonrpc\":\"2.0\"}";
-        let encoded = wire(body).await;
+        let mut encoded = Vec::new();
+        write_frame(&mut encoded, body).await.unwrap();
         let result = read_frame(&mut BufReader::new(encoded.as_slice())).await.unwrap().unwrap();
         assert_eq!(result, body);
     }

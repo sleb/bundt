@@ -1,7 +1,8 @@
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use bundt::framing::{read_frame, write_frame};
-use tokio::io::BufReader;
+use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::process::Command;
 
 fn bundt_cmd() -> Command {
     Command::new(env!("CARGO_BIN_EXE_bundt"))
@@ -9,12 +10,6 @@ fn bundt_cmd() -> Command {
 
 fn lsp_echo_path() -> &'static str {
     env!("CARGO_BIN_EXE_lsp_echo")
-}
-
-async fn encode(body: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::new();
-    write_frame(&mut buf, body).await.unwrap();
-    buf
 }
 
 #[tokio::test]
@@ -30,12 +25,13 @@ async fn three_frames_forwarded_unchanged() {
 
     let mut stdin = child.stdin.take().unwrap();
     for body in bodies {
-        let frame = encode(body).await;
-        std::io::Write::write_all(&mut stdin, &frame).unwrap();
+        let mut frame = Vec::new();
+        write_frame(&mut frame, body).await.unwrap();
+        stdin.write_all(&frame).await.unwrap();
     }
     drop(stdin);
 
-    let output = child.wait_with_output().unwrap();
+    let output = child.wait_with_output().await.unwrap();
     assert!(output.status.success(), "bundt exited: {}", output.status);
 
     let mut reader = BufReader::new(output.stdout.as_slice());
@@ -60,13 +56,16 @@ async fn malformed_json_frame_skipped_valid_frames_still_arrive() {
         .unwrap();
 
     let mut stdin = child.stdin.take().unwrap();
-    std::io::Write::write_all(&mut stdin, &encode(good_before).await).unwrap();
-    std::io::Write::write_all(&mut stdin, bad_frame).unwrap();
-    std::io::Write::write_all(&mut stdin, &encode(good_after).await).unwrap();
+    let mut buf = Vec::new();
+    write_frame(&mut buf, good_before).await.unwrap();
+    stdin.write_all(&buf).await.unwrap();
+    stdin.write_all(bad_frame).await.unwrap();
+    buf.clear();
+    write_frame(&mut buf, good_after).await.unwrap();
+    stdin.write_all(&buf).await.unwrap();
     drop(stdin);
 
-    let output = child.wait_with_output().unwrap();
-    // malformed frame is skipped but bundt must not exit non-zero
+    let output = child.wait_with_output().await.unwrap();
     assert!(output.status.success(), "bundt exited: {}", output.status);
 
     let mut reader = BufReader::new(output.stdout.as_slice());
@@ -88,12 +87,13 @@ async fn lsp_exit_code_propagated_to_bundt() {
         .spawn()
         .unwrap();
 
-    // Send one frame then close stdin.
     let mut stdin = child.stdin.take().unwrap();
-    std::io::Write::write_all(&mut stdin, &encode(b"{\"id\":1}").await).unwrap();
+    let mut frame = Vec::new();
+    write_frame(&mut frame, b"{\"id\":1}").await.unwrap();
+    stdin.write_all(&frame).await.unwrap();
     drop(stdin);
 
-    let output = child.wait_with_output().unwrap();
+    let output = child.wait_with_output().await.unwrap();
     assert_eq!(output.status.code(), Some(42), "expected exit 42, got: {}", output.status);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("42"), "expected exit code in stderr, got: {stderr}");
@@ -108,9 +108,8 @@ async fn clean_shutdown_exits_0() {
         .spawn()
         .unwrap();
 
-    // Close stdin immediately — no frames sent.
     drop(child.stdin.take());
 
-    let output = child.wait_with_output().unwrap();
+    let output = child.wait_with_output().await.unwrap();
     assert_eq!(output.status.code(), Some(0), "expected exit 0, got: {}", output.status);
 }

@@ -24,15 +24,15 @@ pub async fn run(
 async fn forward(
     mut reader: impl AsyncBufRead + Unpin,
     mut writer: impl AsyncWrite + Unpin,
-    label: &str,
+    label: &'static str,
 ) -> Result<()> {
     loop {
         let frame = match read_frame(&mut reader).await {
             Ok(Some(f)) => f,
             Ok(None) => return Ok(()), // clean EOF
             Err(e) => {
-                eprintln!("bundt: {label}: framing error ({e}), skipping");
-                continue;
+                eprintln!("bundt: {label}: framing error ({e})");
+                return Err(e);
             }
         };
         if serde_json::from_slice::<serde_json::Value>(&frame).is_err() {
@@ -50,19 +50,14 @@ mod tests {
 
     use crate::framing::write_frame;
 
-    async fn encode(body: &[u8]) -> Vec<u8> {
-        let mut buf = Vec::new();
-        write_frame(&mut buf, body).await.unwrap();
-        buf
-    }
-
     // Unit tests call forward() directly via &mut references so the output
     // Vec stays accessible for inspection after the call.
 
     #[tokio::test]
     async fn ide_to_lsp_forwarded_unchanged() {
         let body = b"{\"method\":\"initialize\"}";
-        let encoded = encode(body).await;
+        let mut encoded = Vec::new();
+        write_frame(&mut encoded, body).await.unwrap();
         let mut reader = BufReader::new(encoded.as_slice());
         let mut lsp_in = Vec::new();
 
@@ -75,7 +70,8 @@ mod tests {
     #[tokio::test]
     async fn lsp_to_ide_forwarded_unchanged() {
         let body = b"{\"id\":1,\"result\":{}}";
-        let encoded = encode(body).await;
+        let mut encoded = Vec::new();
+        write_frame(&mut encoded, body).await.unwrap();
         let mut reader = BufReader::new(encoded.as_slice());
         let mut ide_out = Vec::new();
 
@@ -86,7 +82,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn malformed_json_in_ide_direction_is_skipped() {
+    async fn malformed_json_frame_is_skipped() {
         let bad = b"Content-Length: 3\r\n\r\nnot";
         let good = b"{\"ok\":true}";
         let mut input = bad.to_vec();
@@ -96,23 +92,6 @@ mod tests {
         let mut writer = Vec::new();
 
         forward(&mut reader, &mut writer, "IDE→LSP").await.unwrap();
-
-        let mut out = BufReader::new(writer.as_slice());
-        assert_eq!(read_frame(&mut out).await.unwrap().unwrap(), good);
-        assert!(read_frame(&mut out).await.unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn malformed_json_in_lsp_direction_is_skipped() {
-        let bad = b"Content-Length: 3\r\n\r\nnot";
-        let good = b"{\"ok\":true}";
-        let mut input = bad.to_vec();
-        write_frame(&mut input, good).await.unwrap();
-
-        let mut reader = BufReader::new(input.as_slice());
-        let mut writer = Vec::new();
-
-        forward(&mut reader, &mut writer, "LSP→IDE").await.unwrap();
 
         let mut out = BufReader::new(writer.as_slice());
         assert_eq!(read_frame(&mut out).await.unwrap().unwrap(), good);
