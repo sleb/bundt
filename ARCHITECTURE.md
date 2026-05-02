@@ -1,6 +1,6 @@
 # Architecture
 
-High-level design for the `bundt` system. Lower-level component docs and per-release design docs live alongside their implementation.
+High-level design for the `bundt` system. Lower-level component docs live in `design/`. Per-release design docs will live alongside their implementation.
 
 ---
 
@@ -70,6 +70,47 @@ The real TypeScript LSP — `vtsls` by default, but configurable. Launched as a 
 
 ---
 
+## Message flow
+
+Two representative flows: a non-Bun file (transparent passthrough) and a Bun-context file (detect → synthesise → inject → forward).
+
+```mermaid
+sequenceDiagram
+    participant IDE
+    participant Router as bundt (Router)
+    participant Detector
+    participant Synthesiser
+    participant LSP as TS LSP
+
+    IDE->>Router: initialize(rootUri)
+    Router->>LSP: initialize(rootUri)
+    LSP-->>Router: initialized response
+    Router-->>IDE: initialized response
+
+    note over IDE,LSP: Non-Bun file
+
+    IDE->>Router: textDocument/didOpen
+    Router->>Detector: detect(content, workspace_root)
+    Detector-->>Router: Inactive
+    Router->>LSP: textDocument/didOpen [forwarded unchanged]
+    LSP-->>Router: publishDiagnostics
+    Router-->>IDE: publishDiagnostics [forwarded unchanged]
+
+    note over IDE,LSP: Bun-context file
+
+    IDE->>Router: textDocument/didOpen
+    Router->>Detector: detect(content, workspace_root)
+    Detector-->>Router: Active(signal)
+    Router->>Synthesiser: synthesise(signal, existing_tsconfig?)
+    Synthesiser-->>Router: SynthesisResult(tsconfig, types_root)
+    Router->>LSP: inject @types/bun virtual documents
+    Router->>LSP: textDocument/didOpen [forwarded]
+    LSP-->>Router: publishDiagnostics
+    Router-->>IDE: publishDiagnostics [forwarded unchanged]
+```
+
+---
+
 ## Contracts
 
 ### IDE ↔ bundt
@@ -79,6 +120,7 @@ Standard LSP over JSON-RPC on stdin/stdout. `bundt` is a drop-in replacement for
 ### bundt ↔ TS LSP subprocess
 
 Standard LSP over JSON-RPC on stdin/stdout. `bundt` is a client of the downstream TS LSP (`vtsls` by default). The only modifications `bundt` makes to the message stream are:
+
 - Augmenting `initialize` with the synthesised tsconfig project info (Bun context only).
 - Injecting virtual document content for `@types/bun` declarations (Bun context only).
 
@@ -91,6 +133,7 @@ The extension launches `bundt` as a subprocess and communicates solely via the I
 ### Debug protocol (v0.3)
 
 Custom LSP workspace commands exposed by `bundt`:
+
 - `bundt/virtualConfig` — returns the synthesised tsconfig as sent to the TS LSP for the active file.
 - `bundt/detectionInfo` — returns the triggering signal and resolved workspace root.
 
