@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use bundt::router;
 use clap::Parser;
 use std::io::ErrorKind;
+use std::process::ExitStatus;
 use tokio::io::BufReader;
 use tokio::process::Command;
 
@@ -40,15 +41,47 @@ async fn run() -> Result<()> {
     let lsp_stdin = child.stdin.take().context("child has no stdin")?;
     let lsp_stdout = child.stdout.take().context("child has no stdout")?;
 
-    router::run(
-        BufReader::new(tokio::io::stdin()),
-        tokio::io::stdout(),
-        lsp_stdin,
-        BufReader::new(lsp_stdout),
-    )
-    .await?;
+    tokio::pin! {
+        let router_future = router::run(
+            BufReader::new(tokio::io::stdin()),
+            tokio::io::stdout(),
+            lsp_stdin,
+            BufReader::new(lsp_stdout),
+        );
+    }
 
-    child.wait().await.context("waiting for TS LSP")?;
+    // Race the router against the child process exiting.
+    //
+    // If the child exits with a non-zero code (unexpected crash), we log and
+    // propagate the exit code immediately rather than waiting for the IDE to
+    // close its connection (which might never happen).
+    //
+    // If the child exits cleanly (code 0), we let the router finish draining
+    // any remaining in-flight frames before returning.
+    let status: ExitStatus = tokio::select! {
+        res = &mut router_future => {
+            res?;
+            child.wait().await.context("waiting for TS LSP")?
+        }
+        status = child.wait() => {
+            let status = status.context("waiting for TS LSP")?;
+            if !status.success() {
+                let code = status.code().unwrap_or(1);
+                eprintln!("bundt: TS LSP exited with status {code}");
+                std::process::exit(code);
+            }
+            // LSP exited cleanly: drain any remaining output before we return.
+            router_future.await?;
+            status
+        }
+    };
+
+    if !status.success() {
+        let code = status.code().unwrap_or(1);
+        eprintln!("bundt: TS LSP exited with status {code}");
+        std::process::exit(code);
+    }
+
     Ok(())
 }
 

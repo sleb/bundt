@@ -27,16 +27,19 @@ async fn forward(
     label: &str,
 ) -> Result<()> {
     loop {
-        match read_frame(&mut reader).await? {
-            Some(frame) => {
-                if serde_json::from_slice::<serde_json::Value>(&frame).is_err() {
-                    eprintln!("bundt: {label}: malformed JSON frame, skipping");
-                    continue;
-                }
-                write_frame(&mut writer, &frame).await?;
+        let frame = match read_frame(&mut reader).await {
+            Ok(Some(f)) => f,
+            Ok(None) => return Ok(()), // clean EOF
+            Err(e) => {
+                eprintln!("bundt: {label}: framing error ({e}), skipping");
+                continue;
             }
-            None => return Ok(()), // clean EOF
+        };
+        if serde_json::from_slice::<serde_json::Value>(&frame).is_err() {
+            eprintln!("bundt: {label}: malformed JSON frame, skipping");
+            continue;
         }
+        write_frame(&mut writer, &frame).await?;
     }
 }
 

@@ -76,3 +76,41 @@ async fn malformed_json_frame_skipped_valid_frames_still_arrive() {
     assert_eq!(f2, good_after);
     assert!(read_frame(&mut reader).await.unwrap().is_none());
 }
+
+#[tokio::test]
+async fn lsp_exit_code_propagated_to_bundt() {
+    let mut child = bundt_cmd()
+        .arg(lsp_echo_path())
+        .args(["--exit-after", "1", "--exit-code", "42"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    // Send one frame then close stdin.
+    let mut stdin = child.stdin.take().unwrap();
+    std::io::Write::write_all(&mut stdin, &encode(b"{\"id\":1}").await).unwrap();
+    drop(stdin);
+
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(42), "expected exit 42, got: {}", output.status);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("42"), "expected exit code in stderr, got: {stderr}");
+}
+
+#[tokio::test]
+async fn clean_shutdown_exits_0() {
+    let mut child = bundt_cmd()
+        .arg(lsp_echo_path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    // Close stdin immediately — no frames sent.
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(0), "expected exit 0, got: {}", output.status);
+}
