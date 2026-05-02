@@ -1,6 +1,3 @@
-// suppress until router.rs consumes these in Step 4
-#![allow(dead_code)]
-
 use anyhow::{bail, Context, Result};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 

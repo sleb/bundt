@@ -1,8 +1,8 @@
-mod framing;
-
 use anyhow::{Context, Result};
+use bundt::router;
 use clap::Parser;
 use std::io::ErrorKind;
+use tokio::io::BufReader;
 use tokio::process::Command;
 
 #[derive(Parser)]
@@ -37,8 +37,17 @@ async fn run() -> Result<()> {
             _ => anyhow::anyhow!("failed to spawn '{}': {}", args.binary, e),
         })?;
 
-    // stdin/stdout piping wired in Step 6; dropping the pipes closes them,
-    // which sends EOF to the subprocess so it exits cleanly.
+    let lsp_stdin = child.stdin.take().context("child has no stdin")?;
+    let lsp_stdout = child.stdout.take().context("child has no stdout")?;
+
+    router::run(
+        BufReader::new(tokio::io::stdin()),
+        tokio::io::stdout(),
+        lsp_stdin,
+        BufReader::new(lsp_stdout),
+    )
+    .await?;
+
     child.wait().await.context("waiting for TS LSP")?;
     Ok(())
 }
