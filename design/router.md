@@ -33,9 +33,9 @@ If the handles were passed by reference instead, neither pipe would close when a
 
 To handle this, `main.rs` races `router::run` against `child.wait()` using `tokio::select!`:
 
-- **`child.wait()` fires first, non-zero exit code** — the TS LSP crashed. Log the status and call `std::process::exit` immediately. The hanging router future is dropped. The editor's built-in LSP restart behaviour takes over.
+- **`child.wait()` fires first, non-zero exit code** — the TS LSP crashed. Log the status and return the exit code immediately. The hanging router future is dropped. The editor's built-in LSP restart behaviour takes over.
 - **`child.wait()` fires first, exit code 0** — the TS LSP exited cleanly (e.g., it processed an `exit` notification and shut itself down before the IDE side closed). Any responses it wrote before exiting are still in the OS pipe buffer. Wait for the router to finish draining them before returning. The router will complete once the IDE also closes its connection.
-- **`router::run` fires first** — the IDE closed its connection normally. Call `child.wait()` once to collect and check the exit status.
+- **`router::run` fires first** — the IDE closed its connection normally. Call `child.wait()` once to collect the exit status; log and propagate it if non-zero.
 
 The asymmetric treatment of exit-0 vs exit-nonzero is intentional. Bailing immediately on exit-0 would silently drop the TS LSP's final responses (diagnostics, completion results) that are buffered in the pipe. Bailing immediately on non-zero is safe because those responses are meaningless — the TS LSP did not finish processing them.
 

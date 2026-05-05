@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use bundt::router;
 use clap::Parser;
 use std::io::ErrorKind;
-use std::process::ExitStatus;
+use std::process::{ExitCode, ExitStatus};
 use tokio::io::BufReader;
 use tokio::process::Command;
 
@@ -17,14 +17,17 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
-    if let Err(e) = run().await {
-        eprintln!("error: {e}");
-        std::process::exit(1);
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(code) => ExitCode::from(code as u8),
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
     }
 }
 
-async fn run() -> Result<()> {
+async fn run() -> Result<i32> {
     let args = Args::parse();
 
     let mut child = Command::new(&args.binary)
@@ -66,9 +69,11 @@ async fn run() -> Result<()> {
         status = child.wait() => {
             let status = status.context("waiting for TS LSP")?;
             if !status.success() {
+                // Child crashed: return immediately rather than waiting for the
+                // IDE to close its connection (which might never happen).
                 let code = status.code().unwrap_or(1);
                 eprintln!("bundt: TS LSP exited with status {code}");
-                std::process::exit(code);
+                return Ok(code);
             }
             // LSP exited cleanly: drain any remaining output before we return.
             router_future.await?;
@@ -76,13 +81,12 @@ async fn run() -> Result<()> {
         }
     };
 
-    if !status.success() {
-        let code = status.code().unwrap_or(1);
+    // Reached only from the router_future arm; child.wait() has now resolved.
+    let code = status.code().unwrap_or(1);
+    if code != 0 {
         eprintln!("bundt: TS LSP exited with status {code}");
-        std::process::exit(code);
     }
-
-    Ok(())
+    Ok(code)
 }
 
 #[cfg(test)]

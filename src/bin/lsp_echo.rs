@@ -1,7 +1,7 @@
 /// Test helper: reads LSP frames from stdin and echoes them back to stdout.
 /// Exits 0 on clean EOF. Accepts an optional --exit-code <N> to override the
 /// exit code (for testing unexpected subprocess exits in step 5).
-use std::process;
+use std::process::ExitCode;
 
 use anyhow::Result;
 use bundt::framing::{read_frame, write_frame};
@@ -19,13 +19,13 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     let args = Args::parse();
     if let Err(e) = run(&args).await {
         eprintln!("lsp_echo error: {e}");
-        process::exit(1);
+        return ExitCode::FAILURE;
     }
-    process::exit(args.exit_code);
+    ExitCode::from(args.exit_code as u8)
 }
 
 async fn run(args: &Args) -> Result<()> {

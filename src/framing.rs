@@ -42,8 +42,10 @@ pub async fn read_frame(reader: &mut (impl AsyncBufRead + Unpin)) -> Result<Opti
 
 pub async fn write_frame(writer: &mut (impl AsyncWrite + Unpin), body: &[u8]) -> Result<()> {
     let header = format!("Content-Length: {}\r\n\r\n", body.len());
-    writer.write_all(header.as_bytes()).await.context("writing LSP frame header")?;
-    writer.write_all(body).await.context("writing LSP frame body")?;
+    let mut frame = Vec::with_capacity(header.len() + body.len());
+    frame.extend_from_slice(header.as_bytes());
+    frame.extend_from_slice(body);
+    writer.write_all(&frame).await.context("writing LSP frame")?;
     Ok(())
 }
 

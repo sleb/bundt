@@ -15,7 +15,7 @@ The project lives in two top-level repositories with independent release cycles:
 
 ## `bundt` — Core LSP proxy
 
-### v0.1 — Transparent proxy
+### v0.1 — Transparent proxy _(released 2026-05-04)_
 
 `bundt` forwards all JSON-RPC traffic to `vtsls` without modification. No bun-specific behaviour. Establishes that the proxy architecture is sound and introduces zero regressions against stock `vtsls`.
 
