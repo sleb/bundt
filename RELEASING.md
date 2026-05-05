@@ -39,6 +39,8 @@ git push && git push --tags
 
 The `--no-ff` flag keeps the merge commit even when a fast-forward is possible, so the graph shows clearly where each release landed.
 
+Pushing the tag triggers the GitHub Actions release workflow, which builds platform binaries and creates the GitHub release automatically — see [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
 ### Patches
 
 For a patch release, cut the branch from the relevant tag rather than from the current tip of `main`:
@@ -86,9 +88,9 @@ Work through these in order. Every item must pass before tagging.
 Drift accumulates during development; the release is the forcing function to clear it. Check each of these against the source:
 
 - [ ] **`ARCHITECTURE.md`** — component descriptions, message flow diagram, contracts, invariants
-- [ ] **`design/detector.md`** — interface types, signal evaluation rules, error handling
-- [ ] **`design/synthesiser.md`** — interface types, required/additive fields, merge algorithm, bundled version
-- [ ] **`design/router.md`** — lifecycle, interception table, detection cache behaviour, error handling table, debug protocol
+- [ ] **`design/router.md`** — lifecycle, concurrency model, interception table, error handling
+- [ ] **`design/detector.md`** _(v0.2+)_ — interface types, signal evaluation rules, error handling
+- [ ] **`design/synthesiser.md`** _(v0.2+)_ — interface types, required/additive fields, merge algorithm, bundled version
 
 Fix any drift before continuing. These edits belong in their own commit or can be squashed into the release commit if trivial.
 
@@ -104,20 +106,23 @@ All tests must pass. Zero Clippy warnings.
 ### 4. Update version and docs
 
 - [ ] **`Cargo.toml`** — bump `version` to the new version string
+- [ ] **`CHANGELOG.md`** — add a new `## [vX.Y.Z] - YYYY-MM-DD` section; this is the text that appears verbatim in the GitHub release notes
 - [ ] **`ROADMAP.md`** — add the release date to the completed milestone heading (e.g. `## v0.2 — MVP _(released YYYY-MM-DD)_`)
 - [ ] **`design/v{VERSION}-plan.md`** — confirm all steps show ✅ Done
 
 ### 5. Commit
 
 ```bash
-git add Cargo.toml Cargo.lock ROADMAP.md design/v{VERSION}-plan.md
+git add Cargo.toml Cargo.lock CHANGELOG.md ROADMAP.md design/v{VERSION}-plan.md
 # plus any docs changed in step 2
 git commit -m "Release v{VERSION}"
 ```
 
-### 6. Tag
+### 6. Merge to `main` and tag
 
 ```bash
+git checkout main
+git merge --no-ff feat/<branch> -m "Release v{VERSION}"
 git tag -a v{VERSION} -m "v{VERSION}"
 ```
 
@@ -126,6 +131,8 @@ git tag -a v{VERSION} -m "v{VERSION}"
 ```bash
 git push && git push --tags
 ```
+
+Pushing the tag kicks off the release workflow. Within a few minutes the GitHub release page will have platform binaries attached and release notes populated from `CHANGELOG.md`.
 
 ### 8. Build platform binaries
 

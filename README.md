@@ -21,3 +21,4 @@ Open a `.ts` file with a `#!/usr/bin/env bun` shebang or a `import { $ } from "b
 
 - [User stories](USER_STORIES.md) — what the system does and for whom
 - [Roadmap](ROADMAP.md) — planned releases for `bundt` and `bundt-zed`
+- [Releasing](RELEASING.md) — branch workflow, versioning policy, and release checklist

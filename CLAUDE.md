@@ -10,14 +10,17 @@ This repo is the **core proxy binary only**. Editor support is provided by per-I
 
 ## Build commands
 
-The implementation phase has not started yet. Once `Cargo.toml` exists, the standard commands will be:
-
 ```
 cargo build
 cargo test
 cargo clippy
 cargo build --release
 ```
+
+## Releasing
+
+See [`RELEASING.md`](RELEASING.md) for the full release process, including the
+branch workflow, versioning policy, and pre-tag checklist.
 
 ## Architecture
 

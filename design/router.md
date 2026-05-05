@@ -16,6 +16,35 @@ bundt <ts-lsp-binary> [ts-lsp-args…]
 
 ---
 
+## Concurrency model
+
+The message loop runs two forwarding directions concurrently using `tokio::try_join!`:
+
+- **IDE → TS LSP** — reads frames from IDE stdin, validates JSON, writes to the TS LSP's stdin pipe
+- **TS LSP → IDE** — reads frames from the TS LSP's stdout pipe, validates JSON, writes to IDE stdout
+
+Each direction **owns** its I/O handles (reader and writer are moved into the forwarding future, not borrowed). This ownership is load-bearing: when the IDE→TS LSP direction completes because IDE stdin reached EOF, it drops its handle to the TS LSP's stdin pipe. That drop closes the write end of the pipe, which delivers EOF to the TS LSP. The TS LSP then exits, closing its own stdout. The TS LSP→IDE direction reads that EOF, completes, and `try_join!` returns.
+
+If the handles were passed by reference instead, neither pipe would close when a direction completed, the TS LSP would have no signal to exit, and both directions would remain blocked indefinitely.
+
+### Unexpected TS LSP exit
+
+`try_join!` only returns once *both* directions complete. If the TS LSP crashes (not via the normal `exit`-notification path), its stdout closes and the TS LSP→IDE direction completes. But the IDE→TS LSP direction is still blocked waiting for IDE stdin — the IDE has not closed its connection because it does not yet know the TS LSP is gone. `try_join!` keeps waiting. `router::run` never returns.
+
+To handle this, `main.rs` races `router::run` against `child.wait()` using `tokio::select!`:
+
+- **`child.wait()` fires first, non-zero exit code** — the TS LSP crashed. Log the status and return the exit code immediately. The hanging router future is dropped. The editor's built-in LSP restart behaviour takes over.
+- **`child.wait()` fires first, exit code 0** — the TS LSP exited cleanly (e.g., it processed an `exit` notification and shut itself down before the IDE side closed). Any responses it wrote before exiting are still in the OS pipe buffer. Wait for the router to finish draining them before returning. The router will complete once the IDE also closes its connection.
+- **`router::run` fires first** — the IDE closed its connection normally. Call `child.wait()` once to collect the exit status; log and propagate it if non-zero.
+
+The asymmetric treatment of exit-0 vs exit-nonzero is intentional. Bailing immediately on exit-0 would silently drop the TS LSP's final responses (diagnostics, completion results) that are buffered in the pipe. Bailing immediately on non-zero is safe because those responses are meaningless — the TS LSP did not finish processing them.
+
+### Known limitation
+
+If the TS LSP exits with code 0 but the IDE never closes its connection, `bundt` hangs waiting for the IDE→TS LSP direction to complete. In practice this does not occur: the normal LSP shutdown sequence is IDE sends `exit` notification → TS LSP exits → IDE closes its stdin. The concurrency model assumes the IDE always closes its side after the TS LSP exits.
+
+---
+
 ## Message interception
 
 ### IDE → TS LSP
