@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tokio::io::{AsyncBufRead, AsyncWrite};
+use tokio::io::{AsyncBufRead, AsyncWrite, AsyncWriteExt as _};
 
 use crate::framing::{read_frame, write_frame};
 
@@ -30,16 +30,14 @@ async fn forward(
         let frame = match read_frame(&mut reader).await {
             Ok(Some(f)) => f,
             Ok(None) => return Ok(()), // clean EOF
-            Err(e) => {
-                eprintln!("bundt: {label}: framing error ({e})");
-                return Err(e);
-            }
+            Err(e) => return Err(e),
         };
         if serde_json::from_slice::<serde_json::Value>(&frame).is_err() {
             eprintln!("bundt: {label}: malformed JSON frame, skipping");
             continue;
         }
         write_frame(&mut writer, &frame).await?;
+        writer.flush().await?;
     }
 }
 

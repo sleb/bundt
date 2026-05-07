@@ -70,7 +70,7 @@ The `@types/bun` declaration files are **embedded in the `bundt` binary at compi
 
 The embedded version is pinned at the time of the `bundt` release. Updating the bundled version requires a new `bundt` release.
 
-The Synthesiser exposes the declarations to the downstream TS LSP via a stable virtual URI prefix (`types_root`). The exact URI scheme and the LSP-level mechanism for making the declarations visible to vtsls are specified in the v0.2 release design.
+The Synthesiser exposes the declarations to the downstream TS LSP via a stable virtual URI prefix (`types_root`). The exact URI scheme and the LSP-level mechanism for making the declarations visible to the downstream language server are specified in the v0.2 release design.
 
 The `@types/bun` package includes ambient module declarations that cover:
 

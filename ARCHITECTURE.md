@@ -42,7 +42,7 @@ High-level design for the `bundt` system. Lower-level component docs live in `de
                       ▼
           ┌───────────────────────┐
           │   TS LSP subprocess   │
-          │  (vtsls or similar)   │
+          │  (typescript-language-server or similar)   │
           └───────────────────────┘
 ```
 
@@ -66,7 +66,7 @@ The core message loop. Reads JSON-RPC from the IDE, asks the Detector whether Bu
 
 ### TS LSP subprocess
 
-The real TypeScript LSP — `vtsls` by default, but configurable. Launched as a child process by `bundt`. Receives all JSON-RPC traffic, either verbatim (non-Bun) or with injected config (Bun). `bundt` has no knowledge of TypeScript semantics — it defers entirely to the downstream LSP.
+The real TypeScript LSP — `typescript-language-server` by default, but configurable. Launched as a child process by `bundt`. Receives all JSON-RPC traffic, either verbatim (non-Bun) or with injected config (Bun). `bundt` has no knowledge of TypeScript semantics — it defers entirely to the downstream LSP.
 
 ---
 
@@ -119,7 +119,7 @@ Standard LSP over JSON-RPC on stdin/stdout. `bundt` is a drop-in replacement for
 
 ### bundt ↔ TS LSP subprocess
 
-Standard LSP over JSON-RPC on stdin/stdout. `bundt` is a client of the downstream TS LSP (`vtsls` by default). The only modifications `bundt` makes to the message stream are:
+Standard LSP over JSON-RPC on stdin/stdout. `bundt` is a client of the downstream TS LSP (`typescript-language-server` by default). The only modifications `bundt` makes to the message stream are:
 
 - Augmenting `initialize` with the synthesised tsconfig project info (Bun context only).
 - Injecting virtual document content for `@types/bun` declarations (Bun context only).

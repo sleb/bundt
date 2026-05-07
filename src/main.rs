@@ -9,7 +9,7 @@ use tokio::process::Command;
 #[derive(Parser)]
 #[command(about = "LSP proxy that adds Bun context to a downstream TypeScript LSP")]
 struct Args {
-    /// Path to the TypeScript LSP binary (e.g. vtsls)
+    /// Path to the TypeScript LSP binary (e.g. typescript-language-server)
     binary: String,
     /// Arguments forwarded to the TypeScript LSP
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -95,15 +95,15 @@ mod tests {
 
     #[test]
     fn args_binary_and_rest() {
-        let args = Args::try_parse_from(["bundt", "vtsls", "--stdio"]).unwrap();
-        assert_eq!(args.binary, "vtsls");
+        let args = Args::try_parse_from(["bundt", "typescript-language-server", "--stdio"]).unwrap();
+        assert_eq!(args.binary, "typescript-language-server");
         assert_eq!(args.lsp_args, ["--stdio"]);
     }
 
     #[test]
     fn args_binary_only_empty_rest() {
-        let args = Args::try_parse_from(["bundt", "vtsls"]).unwrap();
-        assert_eq!(args.binary, "vtsls");
+        let args = Args::try_parse_from(["bundt", "typescript-language-server"]).unwrap();
+        assert_eq!(args.binary, "typescript-language-server");
         assert!(args.lsp_args.is_empty());
     }
 

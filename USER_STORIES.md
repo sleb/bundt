@@ -38,13 +38,13 @@
 
 ## Epic 3: LSP proxy and feature parity
 
-**US-09** — As a script author, I see red squiggles disappear on `Bun.serve`, `$`, `fetch`, and other Bun globals once the extension activates, because the proxy injects the correct types before vtsls processes the file.
+**US-09** — As a script author, I see red squiggles disappear on `Bun.serve`, `$`, `fetch`, and other Bun globals once the extension activates, because the proxy injects the correct types before the downstream TypeScript language server processes the file.
 
 **US-10** — As a script author, I get accurate auto-complete suggestions for Bun APIs (e.g. `Bun.file`, `Bun.serve`, `Bun.password`) powered by the bundled type declarations.
 
 **US-11** — As a script author, go-to-definition on a Bun API navigates to the bundled type declaration, so I can read the signature without leaving the editor.
 
-**US-12** — As a script author, all standard TypeScript LSP features (completions, hover docs, find-references, rename symbol, inlay hints) continue to work exactly as they do with the default vtsls setup, because non-Bun-specific traffic is forwarded transparently.
+**US-12** — As a script author, all standard TypeScript LSP features (completions, hover docs, find-references, rename symbol, inlay hints) continue to work exactly as they do with the default `typescript-language-server` setup, because non-Bun-specific traffic is forwarded transparently.
 
 **US-13** — As a script author, diagnostics update in real time as I edit, with no noticeable additional latency introduced by the proxy layer.
 
@@ -64,7 +64,7 @@
 
 ## Epic 5: Bundled dependencies and self-contained distribution
 
-**US-18** — As a script author, the extension works fully offline after installation — no network requests are made at activation time.
+**US-18** — As a script author, after the first activation (which downloads `typescript-language-server` via Zed's npm integration with a one-time prompt), the extension works fully offline — no network requests are made on subsequent activations.
 
 **US-19** — As an extension maintainer, `@types/bun` declarations are vendored inside the extension bundle so the shipped version is known-good and updates are controlled via extension releases.
 
@@ -90,17 +90,17 @@
 
 ## Epic 7: Reliability and error handling
 
-**US-26** — As a script author, if vtsls is not found on the system, Bundt surfaces a clear error message in the Zed LSP log rather than silently failing.
+**US-26** — As a script author, if the downstream TypeScript language server is not found, Bundt surfaces a clear error message in the Zed LSP log rather than silently failing.
 
-**US-27** — As a script author, if the proxy crashes or the underlying vtsls process exits, Zed's standard LSP restart behaviour kicks in and Bundt recovers without requiring a manual editor restart.
+**US-27** — As a script author, if the proxy crashes or the underlying TypeScript language server process exits, Zed's standard LSP restart behaviour kicks in and Bundt recovers without requiring a manual editor restart.
 
-**US-28** — As a script author, malformed or oversized JSON-RPC messages from vtsls do not crash the proxy — they are logged and skipped gracefully.
+**US-28** — As a script author, malformed or oversized JSON-RPC messages from the downstream language server do not crash the proxy — they are logged and skipped gracefully.
 
 ---
 
 ## Epic 8: Diagnostics and debugging
 
-**US-29** — As a script author, I can run a Zed command (`Bundt: Show Virtual Config`) that prints the synthesised `tsconfig.json` — exactly as it was sent to vtsls — to the Zed output panel, so I can diagnose unexpected type errors.
+**US-29** — As a script author, I can run a Zed command (`Bundt: Show Virtual Config`) that prints the synthesised `tsconfig.json` — exactly as it was sent to the downstream TypeScript language server — to the Zed output panel, so I can diagnose unexpected type errors.
 
 **US-30** — As a script author, I can run a Zed command (`Bundt: Show Detection Info`) that prints which signal triggered activation (shebang / `"bun"` import / `bun.lockb`) and the workspace root that was resolved, so I can understand why Bundt did or did not activate.
 

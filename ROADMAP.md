@@ -17,17 +17,17 @@ The project lives in two top-level repositories with independent release cycles:
 
 ### v0.1 — Transparent proxy _(released 2026-05-04)_
 
-`bundt` forwards all JSON-RPC traffic to `vtsls` without modification. No bun-specific behaviour. Establishes that the proxy architecture is sound and introduces zero regressions against stock `vtsls`.
+`bundt` forwards all JSON-RPC traffic to the downstream TypeScript language server without modification. No bun-specific behaviour. Establishes that the proxy architecture is sound and introduces zero regressions against the downstream LSP.
 
 | Story | Summary                                                           |
 | ----- | ----------------------------------------------------------------- |
 | US-12 | Full LSP feature parity via transparent forwarding                |
 | US-13 | No measurable latency added by the proxy layer                    |
-| US-26 | Clear error when `vtsls` is not found                             |
-| US-27 | Recovery via Zed's standard LSP restart if proxy or vtsls crashes |
+| US-26 | Clear error when the downstream TypeScript language server is not found |
+| US-27 | Recovery via Zed's standard LSP restart if proxy or downstream LSP crashes |
 | US-28 | Malformed JSON-RPC messages are logged and skipped, not fatal     |
 
-**Done when:** substituting `bundt` for `vtsls` in any LSP client produces identical editor behaviour.
+**Done when:** substituting `bundt` for `typescript-language-server` in any LSP client produces identical editor behaviour.
 
 ---
 
@@ -40,7 +40,7 @@ The core value proposition. `bundt` detects bun context, synthesises a virtual t
 | US-01 | Activate on `#!/usr/bin/env bun` shebang                                                   |
 | US-02 | Activate on `import … from "bun"`                                                          |
 | US-03 | Activate on `bun.lockb` in workspace                                                       |
-| US-04 | Stay inactive (fall through to vtsls) when no bun signal present                           |
+| US-04 | Stay inactive (fall through to the downstream LSP) when no bun signal present              |
 | US-05 | Synthesise virtual tsconfig (`moduleResolution: bundler`, `resolveJsonModule: true`, etc.) |
 | US-06 | Single-file script with no tsconfig on disk is covered correctly                           |
 | US-07 | Existing on-disk tsconfig is merged/extended, not replaced                                 |
@@ -62,7 +62,7 @@ Implements custom LSP commands that expose the proxy's internal state. The Zed e
 
 | Story | Summary                                                                         |
 | ----- | ------------------------------------------------------------------------------- |
-| US-29 | Custom LSP command returns the synthesised tsconfig as sent to vtsls            |
+| US-29 | Custom LSP command returns the synthesised tsconfig as sent to the downstream LSP |
 | US-30 | Custom LSP command returns the detection signal and resolved workspace root     |
 | US-31 | `bundt.logLevel: "debug"` setting enables full JSON-RPC traffic logging to file |
 
@@ -82,7 +82,7 @@ One-click install from the Zed marketplace. The extension bundles the correct `b
 | US-15 | No post-install config — registers automatically                                               |
 | US-16 | No conflict with other TS extensions; clean fallback on disable                                |
 | US-17 | Entire extension in Rust — one language, one toolchain                                         |
-| US-18 | Fully offline after install                                                                    |
+| US-18 | Fully offline after first activation (first activation downloads `typescript-language-server` via Zed's npm integration) |
 | US-20 | Works out of the box with bundled `@types/bun`                                                 |
 | US-21 | Platform binaries shipped as extension assets (linux-x64, macos-x64, macos-arm64, windows-x64) |
 

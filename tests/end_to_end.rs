@@ -4,30 +4,32 @@ use std::process::Stdio;
 use bundt::framing::{read_frame, write_frame};
 use tokio::io::BufReader;
 
-fn find_vtsls() -> Option<String> {
+fn find_ts_lsp() -> Option<String> {
     if let Ok(p) = std::env::var("BUNDT_TEST_LSP") {
         return Some(p);
     }
-    which::which("vtsls").ok().map(|p| p.to_string_lossy().into_owned())
+    which::which("typescript-language-server")
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 fn initialize_request() -> Vec<u8> {
     br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}"#.to_vec()
 }
 
-/// Sends a single `initialize` request through `bundt <vtsls> --stdio` and
+/// Sends a single `initialize` request through `bundt <typescript-language-server> --stdio` and
 /// asserts that the response is a valid JSON-RPC result for id 1.
 ///
-/// Skips if `vtsls` is not available on PATH (or via BUNDT_TEST_LSP).
+/// Skips if `typescript-language-server` is not available on PATH (or via BUNDT_TEST_LSP).
 #[tokio::test]
 async fn initialize_round_trip() {
-    let Some(vtsls) = find_vtsls() else {
-        eprintln!("initialize_round_trip: skipped (vtsls not found; set BUNDT_TEST_LSP to override)");
+    let Some(ts_lsp) = find_ts_lsp() else {
+        eprintln!("initialize_round_trip: skipped (typescript-language-server not found; set BUNDT_TEST_LSP to override)");
         return;
     };
 
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_bundt"))
-        .args([&vtsls, "--stdio"])
+        .args([&ts_lsp, "--stdio"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
