@@ -82,7 +82,7 @@ One-click install from the Zed marketplace. The extension bundles the correct `b
 | US-15 | No post-install config — registers automatically                                               |
 | US-16 | No conflict with other TS extensions; clean fallback on disable                                |
 | US-17 | Entire extension in Rust — one language, one toolchain                                         |
-| US-18 | Fully offline after first activation (first activation downloads `typescript-language-server` via Zed's npm integration) |
+| US-18 | `typescript-language-server` downloaded automatically on first use via `bun x`; cached by Bun thereafter — no manual install |
 | US-20 | Works out of the box with bundled `@types/bun`                                                 |
 | US-21 | Platform binaries shipped as extension assets (linux-x64, macos-x64, macos-arm64, windows-x64) |
 

@@ -66,7 +66,7 @@ The core message loop. Reads JSON-RPC from the IDE, asks the Detector whether Bu
 
 ### TS LSP subprocess
 
-The real TypeScript LSP — `typescript-language-server` by default, but configurable. Launched as a child process by `bundt`. Receives all JSON-RPC traffic, either verbatim (non-Bun) or with injected config (Bun). `bundt` has no knowledge of TypeScript semantics — it defers entirely to the downstream LSP.
+The real TypeScript LSP. Launched as a child process by `bundt`. By default, `bundt` runs `bun x typescript-language-server --stdio`, which downloads and caches the server on first use via Bun's package runner — no separate `npm install` required. An explicit binary and arguments can be passed on the command line to override (e.g. `bundt /path/to/typescript-language-server --stdio`). `bundt` has no knowledge of TypeScript semantics — it defers entirely to the downstream LSP.
 
 ---
 

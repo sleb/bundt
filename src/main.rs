@@ -7,11 +7,18 @@ use tokio::io::BufReader;
 use tokio::process::Command;
 
 #[derive(Parser)]
-#[command(about = "LSP proxy that adds Bun context to a downstream TypeScript LSP")]
+#[command(
+    about = "LSP proxy that adds Bun context to a downstream TypeScript LSP",
+    long_about = "LSP proxy that adds Bun context to a downstream TypeScript LSP.\n\n\
+        With no arguments, launches `bun x typescript-language-server --stdio`.\n\
+        Bun must be on PATH. Override by passing a custom binary and arguments:\n\n\
+        \x20   bundt typescript-language-server --stdio\n\
+        \x20   bundt /path/to/bun x typescript-language-server --stdio"
+)]
 struct Args {
-    /// Path to the TypeScript LSP binary (e.g. typescript-language-server)
-    binary: String,
-    /// Arguments forwarded to the TypeScript LSP
+    /// Downstream TypeScript LSP binary. Defaults to `bun` (runs via `bun x typescript-language-server --stdio`).
+    binary: Option<String>,
+    /// Arguments forwarded to the downstream LSP binary.
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     lsp_args: Vec<String>,
 }
@@ -30,15 +37,31 @@ async fn main() -> ExitCode {
 async fn run() -> Result<i32> {
     let args = Args::parse();
 
-    let mut child = Command::new(&args.binary)
-        .args(&args.lsp_args)
+    let using_default = args.binary.is_none();
+    let (binary, lsp_args) = match args.binary {
+        Some(b) => (b, args.lsp_args),
+        None => (
+            "bun".to_string(),
+            vec![
+                "x".to_string(),
+                "typescript-language-server".to_string(),
+                "--stdio".to_string(),
+            ],
+        ),
+    };
+
+    let mut child = Command::new(&binary)
+        .args(&lsp_args)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit())
         .spawn()
         .map_err(|e| match e.kind() {
-            ErrorKind::NotFound => anyhow::anyhow!("'{}': not found", args.binary),
-            _ => anyhow::anyhow!("failed to spawn '{}': {}", args.binary, e),
+            ErrorKind::NotFound if using_default => anyhow::anyhow!(
+                "'bun': not found — install Bun from https://bun.sh or specify a custom LSP: bundt <binary> [args…]"
+            ),
+            ErrorKind::NotFound => anyhow::anyhow!("'{}': not found", binary),
+            _ => anyhow::anyhow!("failed to spawn '{}': {}", binary, e),
         })?;
 
     let lsp_stdin = child.stdin.take().context("child has no stdin")?;
@@ -96,19 +119,21 @@ mod tests {
     #[test]
     fn args_binary_and_rest() {
         let args = Args::try_parse_from(["bundt", "typescript-language-server", "--stdio"]).unwrap();
-        assert_eq!(args.binary, "typescript-language-server");
+        assert_eq!(args.binary.unwrap(), "typescript-language-server");
         assert_eq!(args.lsp_args, ["--stdio"]);
     }
 
     #[test]
     fn args_binary_only_empty_rest() {
         let args = Args::try_parse_from(["bundt", "typescript-language-server"]).unwrap();
-        assert_eq!(args.binary, "typescript-language-server");
+        assert_eq!(args.binary.unwrap(), "typescript-language-server");
         assert!(args.lsp_args.is_empty());
     }
 
     #[test]
-    fn args_no_binary_fails() {
-        assert!(Args::try_parse_from(["bundt"]).is_err());
+    fn args_no_binary_uses_default() {
+        let args = Args::try_parse_from(["bundt"]).unwrap();
+        assert!(args.binary.is_none());
+        assert!(args.lsp_args.is_empty());
     }
 }

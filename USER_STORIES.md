@@ -64,7 +64,7 @@
 
 ## Epic 5: Bundled dependencies and self-contained distribution
 
-**US-18** — As a script author, after the first activation (which downloads `typescript-language-server` via Zed's npm integration with a one-time prompt), the extension works fully offline — no network requests are made on subsequent activations.
+**US-18** — As a script author, `typescript-language-server` is downloaded automatically on first use via `bun x` (Bun's package runner) with no manual install step. After the first activation, the package is cached by Bun and no further network requests are made.
 
 **US-19** — As an extension maintainer, `@types/bun` declarations are vendored inside the extension bundle so the shipped version is known-good and updates are controlled via extension releases.
 
@@ -72,7 +72,7 @@
 
 **US-20b** _(future)_ — As a project developer, I can configure in Zed settings which version of `@types/bun` Bundt uses: `bundled` (default), a `localPath` pointing to a directory on disk, or `download` to fetch a specific version from the npm registry at activation time.
 
-**US-21** — As an extension maintainer, the proxy binary is compiled for each supported platform (linux-x64, macos-x64, macos-arm64, windows-x64) and shipped as extension assets, so end users have no runtime dependency (no Bun, no Node) to install.
+**US-21** — As an extension maintainer, the proxy binary is compiled for each supported platform (linux-x64, macos-x64, macos-arm64, windows-x64) and shipped as extension assets. Bun is the only runtime dependency, and it is already present on any machine running Bun scripts — no Node or npm install is required.
 
 ---
 

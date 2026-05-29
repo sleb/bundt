@@ -5,13 +5,13 @@ fn bundt() -> Command {
 }
 
 #[test]
-fn no_args_exits_nonzero_with_usage() {
-    let out = bundt().output().unwrap();
-    assert!(!out.status.success());
-    let stderr = String::from_utf8_lossy(&out.stderr);
+fn help_mentions_bun_default() {
+    let out = bundt().arg("--help").output().unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stderr.contains("binary") || stderr.contains("Usage"),
-        "unexpected stderr: {stderr}"
+        stdout.contains("bun x typescript-language-server"),
+        "unexpected help output: {stdout}"
     );
 }
 

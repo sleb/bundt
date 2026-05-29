@@ -8,7 +8,7 @@ Open a `.ts` file with a `#!/usr/bin/env bun` shebang or a `import { $ } from "b
 
 ## How it works
 
-`bundt` sits between your IDE and `vtsls`. It detects bun context, synthesises a virtual `tsconfig.json` in memory, and injects bundled `@types/bun` declarations — then forwards everything else to `vtsls` unchanged.
+`bundt` sits between your IDE and `typescript-language-server`. It detects Bun context, synthesises a virtual `tsconfig.json` in memory, and injects bundled `@types/bun` declarations — then forwards everything else unchanged. The downstream server is launched via `bun x typescript-language-server`, so no separate install is needed.
 
 ## Repositories
 
