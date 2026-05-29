@@ -51,9 +51,10 @@ If the TS LSP exits with code 0 but the IDE never closes its connection, `bundt`
 
 | Message                                                       | Action                                                                                                                                                                                                                                                  |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `initialize` (request)                                        | Check `workspace_root` (from `rootUri` / `rootPath` params) for `bun.lockb`. If present, record workspace-level activation. Forward the request, augmenting `initializationOptions` if workspace-level active.                                          |
-| `textDocument/didOpen`                                        | Run the Detector on file content + workspace root. Cache the `DetectionResult` for the URI. If Active: read on-disk `tsconfig.json` if present, call the Synthesiser, inject virtual type document notifications to the TS LSP. Then forward `didOpen`. |
-| `textDocument/didClose`                                       | Forward. Evict the URI from the detection cache.                                                                                                                                                                                                        |
+| `initialize` (request)                                        | Extract `workspace_root` from `rootUri` / `rootPath` params. Check for `bun.lockb`. If present, call the Synthesiser and store the result as `pending_synthesis`; set `bun_active = true`. Forward the request unchanged — configuration injection waits for `initialized`. |
+| `initialized` (notification, from IDE)                        | If `bun_active` and `pending_synthesis` is set: send `workspace/didChangeConfiguration` to the TS LSP with the synthesised `implicitProjectConfig.compilerOptions`; clear `pending_synthesis`. Then forward `initialized`.                               |
+| `textDocument/didOpen`                                        | Run the Detector on file content + workspace root. Cache the `DetectionResult` for the URI. If Active and Bun context not yet activated: call the Synthesiser, send `workspace/didChangeConfiguration` to the TS LSP, set `bun_active = true`. Then forward `didOpen`. |
+| `textDocument/didClose`                                       | Evict the URI from the detection cache. Forward the frame.                                                                                                                                                                                              |
 | `workspace/executeCommand` where command starts with `bundt/` | Handle internally (see debug protocol below). Do **not** forward to the TS LSP.                                                                                                                                                                         |
 | All other messages                                            | Forward byte-for-byte.                                                                                                                                                                                                                                  |
 
@@ -71,7 +72,7 @@ Maps `DocumentUri → DetectionResult`. Maintained for the lifetime of the messa
 - Evicted on `textDocument/didClose`.
 - If `didOpen` arrives for a URI already in the cache (e.g. file reloaded), re-run detection and update the cache entry.
 
-The cache is the authoritative source for whether injection has occurred for a given document. The Synthesiser is not called again for a document that is already cached as Active.
+The cache is the authoritative source for per-document detection state. The `bun_active` flag on `RouterState` is the authoritative source for whether `workspace/didChangeConfiguration` has been sent this session — it is a one-way latch set on first Bun activation and never reset. The Synthesiser is not called again after `bun_active` is true.
 
 ---
 

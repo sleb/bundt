@@ -8,19 +8,18 @@ Produces the in-memory TypeScript configuration and type declarations that give 
 
 **Inputs**
 
-| Field               | Type                        | Description                                                                              |
-| ------------------- | --------------------------- | ---------------------------------------------------------------------------------------- |
-| `signal`            | `Signal`                    | The triggering signal from the Detector                                                  |
-| `existing_tsconfig` | `Option<serde_json::Value>` | Pre-parsed content of the on-disk `tsconfig.json`, if present; the caller reads the file |
+| Field    | Type     | Description                              |
+| -------- | -------- | ---------------------------------------- |
+| `signal` | `Signal` | The triggering signal from the Detector  |
 
-The Synthesiser does not read from disk itself. The caller (Router) is responsible for locating and reading any on-disk `tsconfig.json` before calling the Synthesiser.
+Merging with an on-disk `tsconfig.json` is deferred to v0.3+. In v0.2 the Synthesiser always starts from `{}`.
 
 **Output**
 
 ```
 SynthesisResult {
-  tsconfig: serde_json::Value,   // merged, in-memory tsconfig
-  types_root: VirtualUri,        // prefix under which @types/bun declarations are served
+  tsconfig: serde_json::Value,   // in-memory compiler options
+  types_root: PathBuf,           // {data_dir}/bundt/bun-types-{VERSION}/ — the typeRoots entry
 }
 ```
 
@@ -53,24 +52,41 @@ These are merged with on-disk values rather than replacing them:
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `compilerOptions.types` | `"bun-types"` is appended to the existing array. If the array is absent, it is created as `["bun-types"]`. If `"bun-types"` is already present, no change. |
 
-### Merge algorithm
+### Merge algorithm (v0.2)
 
-1. Start from `existing_tsconfig` if present, otherwise start from `{}`.
-2. Ensure `compilerOptions` object exists.
-3. Apply required overrides (see above).
-4. Apply additive merges (see above).
+Start from `{}`. Apply all required and additive fields. No on-disk `tsconfig.json` is read or merged — that is deferred to v0.3+.
 
-The output `tsconfig` is a complete JSON object suitable for passing to the downstream TS LSP. Nothing is written to disk.
+The output `tsconfig` contains only `compilerOptions` fields and is passed to the downstream TS LSP via `workspace/didChangeConfiguration` → `settings.typescript.tsserver.implicitProjectConfig.compilerOptions`. Nothing is written to disk in the workspace.
 
 ---
 
 ## @types/bun declarations
 
-The `@types/bun` declaration files are **embedded in the `bundt` binary at compile time**. They are not read from disk, not fetched from the network, and not resolved through `node_modules`.
+The `@types/bun` declaration files are **embedded in the `bundt` binary at compile time** via `build.rs` and `include_bytes!`. They are not read from disk, not fetched from the network, and not resolved through `node_modules`.
 
-The embedded version is pinned at the time of the `bundt` release. Updating the bundled version requires a new `bundt` release.
+The embedded version is pinned at the time of the `bundt` release (v0.2.0 ships `bun-types` 1.3.14). Updating the bundled version requires a new `bundt` release.
 
-The Synthesiser exposes the declarations to the downstream TS LSP via a stable virtual URI prefix (`types_root`). The exact URI scheme and the LSP-level mechanism for making the declarations visible to vtsls are specified in the v0.2 release design.
+### Extraction
+
+On first Bun activation the Synthesiser extracts the embedded files to the user data directory:
+
+```
+{data_dir}/bundt/bun-types-{VERSION}/
+  bun-types/
+    index.d.ts
+    bun.d.ts
+    … (mirrors vendor/bun-types/ structure)
+```
+
+| Platform | `data_dir`                        |
+| -------- | --------------------------------- |
+| macOS    | `~/Library/Application Support`   |
+| Linux    | `$XDG_DATA_HOME` or `~/.local/share` |
+| Windows  | `%APPDATA%`                       |
+
+The version string in the path acts as a cache key — if the directory already exists, extraction is skipped. A new `bundt` release with a new `bun-types` version creates a new directory; the old one is left in place.
+
+The synthesised tsconfig sets `typeRoots = ["{data_dir}/bundt/bun-types-{VERSION}"]` and `types = ["bun-types"]`. The downstream TS LSP resolves `bun-types` from the extracted directory.
 
 The `@types/bun` package includes ambient module declarations that cover:
 
@@ -84,6 +100,6 @@ Deep per-file shape inference for TOML (e.g. property-level autocomplete from a 
 ## Invariants
 
 - Only called when `DetectionResult` is `Active`. The Router must not call the Synthesiser for inactive files.
-- Never writes to disk.
-- Output is deterministic for a given `(signal, existing_tsconfig)` pair.
+- Never writes to the user's workspace. Extraction targets the OS user data directory, not the project directory.
+- Output is deterministic for a given `signal` (the signal value does not affect the output in v0.2).
 - The embedded `@types/bun` bytes are compile-time constants; they do not change at runtime regardless of configuration.

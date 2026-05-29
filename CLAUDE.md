@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`bundt` is a proxy LSP server written in Rust. It sits between an IDE and a TypeScript LSP (`vtsls` by default), detects Bun context, synthesises a virtual `tsconfig.json` in memory, and injects bundled `@types/bun` declarations — then forwards everything else unchanged. The goal is zero-config Bun TypeScript intelligence for single-file scripts.
+`bundt` is a proxy LSP server written in Rust. It sits between an IDE and a TypeScript LSP (`bun x typescript-language-server` by default), detects Bun context, synthesises a virtual `tsconfig.json` in memory, and injects bundled `@types/bun` declarations — then forwards everything else unchanged. The goal is zero-config Bun TypeScript intelligence for single-file scripts. Because the downstream server is launched via `bun x`, no separate Node or npm install is required — only Bun, which users already have.
 
 This repo is the **core proxy binary only**. Editor support is provided by per-IDE extension repos (`bundt-zed` for Zed, with others to follow) that bundle and launch `bundt`.
 
