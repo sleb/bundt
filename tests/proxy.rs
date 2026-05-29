@@ -1,7 +1,10 @@
 use std::io::Write as _;
+use std::path::Path;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use bundt::framing::{read_frame, write_frame};
+use serde_json::Value;
 use tokio::io::BufReader;
 
 fn bundt_path() -> &'static str {
@@ -33,6 +36,43 @@ fn run_bundt(args: Vec<String>, stdin_bytes: Vec<u8>) -> std::process::Output {
 
     child.wait_with_output().unwrap()
 }
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+async fn encode_frames(frames: &[&[u8]]) -> Vec<u8> {
+    let mut buf = Vec::new();
+    for f in frames {
+        write_frame(&mut buf, f).await.unwrap();
+    }
+    buf
+}
+
+async fn decode_all_frames(bytes: &[u8]) -> Vec<Value> {
+    let mut reader = BufReader::new(bytes);
+    let mut out = Vec::new();
+    while let Some(f) = read_frame(&mut reader).await.unwrap() {
+        if let Ok(v) = serde_json::from_slice::<Value>(&f) {
+            out.push(v);
+        }
+    }
+    out
+}
+
+fn tmp_dir_with_lockfile() -> std::path::PathBuf {
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir()
+        .join(format!("bundt-proxy-test-{}-{}", std::process::id(), id));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("bun.lockb"), b"").unwrap();
+    dir
+}
+
+fn file_uri(path: &Path) -> String {
+    format!("file://{}", path.display())
+}
+
+// ── forwarding tests ──────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn three_frames_forwarded_unchanged() {
@@ -136,5 +176,107 @@ async fn clean_shutdown_exits_0() {
         Some(0),
         "expected exit 0, got: {}",
         output.status
+    );
+}
+
+// ── Bun injection tests ───────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn lockfile_workspace_injects_configuration_after_initialized() {
+    let dir = tmp_dir_with_lockfile();
+    let init = format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"rootUri":"{}","capabilities":{{}}}}}}"#,
+        file_uri(&dir)
+    );
+    let initialized = br#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#;
+    let stdin_bytes = encode_frames(&[init.as_bytes(), initialized]).await;
+
+    let output = tokio::task::spawn_blocking(move || {
+        run_bundt(vec![lsp_echo_path().to_owned()], stdin_bytes)
+    })
+    .await
+    .unwrap();
+
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(output.status.success(), "bundt exited: {}", output.status);
+
+    let frames = decode_all_frames(&output.stdout).await;
+    assert!(
+        frames.iter().any(|f| f["method"] == "workspace/didChangeConfiguration"),
+        "expected config notification in output frames: {frames:?}"
+    );
+
+    // Config must arrive before the echoed initialized frame.
+    let config_pos = frames
+        .iter()
+        .position(|f| f["method"] == "workspace/didChangeConfiguration")
+        .unwrap();
+    let initialized_pos = frames
+        .iter()
+        .position(|f| f["method"] == "initialized")
+        .unwrap();
+    assert!(
+        config_pos < initialized_pos,
+        "config ({config_pos}) should precede initialized ({initialized_pos})"
+    );
+}
+
+#[tokio::test]
+async fn shebang_did_open_injects_configuration() {
+    let init = br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"rootUri":null,"capabilities":{}}}"#;
+    let initialized = br#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#;
+    let did_open = br##"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///script.ts","languageId":"typescript","version":1,"text":"#!/usr/bin/env bun\n"}}}"##;
+    let stdin_bytes = encode_frames(&[init, initialized, did_open]).await;
+
+    let output = tokio::task::spawn_blocking(move || {
+        run_bundt(vec![lsp_echo_path().to_owned()], stdin_bytes)
+    })
+    .await
+    .unwrap();
+
+    assert!(output.status.success(), "bundt exited: {}", output.status);
+
+    let frames = decode_all_frames(&output.stdout).await;
+    assert!(
+        frames.iter().any(|f| f["method"] == "workspace/didChangeConfiguration"),
+        "expected config notification for shebang file: {frames:?}"
+    );
+
+    // Config must arrive before the echoed didOpen frame.
+    let config_pos = frames
+        .iter()
+        .position(|f| f["method"] == "workspace/didChangeConfiguration")
+        .unwrap();
+    let did_open_pos = frames
+        .iter()
+        .position(|f| f["method"] == "textDocument/didOpen")
+        .unwrap();
+    assert!(
+        config_pos < did_open_pos,
+        "config ({config_pos}) should precede didOpen ({did_open_pos})"
+    );
+}
+
+#[tokio::test]
+async fn non_bun_did_open_no_configuration_injected() {
+    let init = br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"rootUri":null,"capabilities":{}}}"#;
+    let initialized = br#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#;
+    let did_open = br#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///app.ts","languageId":"typescript","version":1,"text":"const x: number = 1;"}}}"#;
+    let stdin_bytes = encode_frames(&[init, initialized, did_open]).await;
+
+    let output = tokio::task::spawn_blocking(move || {
+        run_bundt(vec![lsp_echo_path().to_owned()], stdin_bytes)
+    })
+    .await
+    .unwrap();
+
+    assert!(output.status.success(), "bundt exited: {}", output.status);
+
+    let frames = decode_all_frames(&output.stdout).await;
+    assert!(
+        frames
+            .iter()
+            .all(|f| f["method"] != "workspace/didChangeConfiguration"),
+        "unexpected config notification for non-Bun file: {frames:?}"
     );
 }
