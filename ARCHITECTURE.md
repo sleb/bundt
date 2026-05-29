@@ -121,8 +121,7 @@ Standard LSP over JSON-RPC on stdin/stdout. `bundt` is a drop-in replacement for
 
 Standard LSP over JSON-RPC on stdin/stdout. `bundt` is a client of the downstream TS LSP (`typescript-language-server` by default). The only modifications `bundt` makes to the message stream are:
 
-- Augmenting `initialize` with the synthesised tsconfig project info (Bun context only).
-- Injecting virtual document content for `@types/bun` declarations (Bun context only).
+- Injecting a `workspace/didChangeConfiguration` notification after `initialized` when Bun context is detected. This sets `typescript.tsserver.implicitProjectConfig.compilerOptions` to the synthesised compiler options (Bun context only).
 
 All other messages are forwarded byte-for-byte in both directions.
 
@@ -143,7 +142,7 @@ These are additive. They have no effect on the standard LSP message flow.
 
 ## Invariants
 
-**No disk writes.** `bundt` never creates, modifies, or deletes files in the user's workspace. All synthesis happens in memory.
+**No workspace writes.** `bundt` never creates, modifies, or deletes files in the user's project directory. `@types/bun` is extracted to the OS user data directory (`~/Library/Application Support/bundt/` on macOS, `~/.local/share/bundt/` on Linux), not the workspace.
 
 **Transparent for non-Bun files.** When the Detector returns inactive, every byte sent by the IDE reaches the downstream TS LSP unchanged and every byte from the TS LSP reaches the IDE unchanged. `bundt` must not alter latency, ordering, or content for non-Bun traffic.
 
@@ -151,6 +150,6 @@ These are additive. They have no effect on the standard LSP message flow.
 
 **TS LSP is authoritative.** `bundt` does not implement TypeScript semantics. Any LSP response that contains type information comes from the downstream TS LSP. `bundt` only shapes the inputs.
 
-**Merge, don't replace.** When an on-disk `tsconfig.json` exists, the synthesised config extends it. Project-specific compiler options are preserved.
+**Single activation per session.** `workspace/didChangeConfiguration` is sent at most once per session — on first Bun activation — regardless of how many Bun files are subsequently opened.
 
 **Single activation signal per file.** The Detector evaluates signals in priority order (shebang > import > lockfile) and returns the first match. Only one signal is active per detection result.
